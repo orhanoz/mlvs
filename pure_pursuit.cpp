@@ -2,12 +2,10 @@
 #include <pure_pursuit/pure_pursuit.h>
 #include <pluginlib/class_list_macros.h>
 
-#define Pi                      3.141592654
-
 PLUGINLIB_DECLARE_CLASS(pure_pursuit, PurePursuit, pure_pursuit::PurePursuit, nav_core::BaseLocalPlanner)
 
 namespace pure_pursuit{
-	PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
+    PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
 	
 	//3 todos
 	void PurePursuit::initialize(std::string name, tf::TransformListener* tf, costmap_2d::Costmap2DROS* costmap_ros){
@@ -17,11 +15,13 @@ namespace pure_pursuit{
 		goal_reached_time_ = ros::Time::now();
 		ros::NodeHandle node_private("~/" + name);
 		collision_planner_.initialize(name, tf_, costmap_ros_);
-		//TODO:parametreler gelicek
-    
+		//TODO:paramlar gelicek
+		node_private.param("tolerance_timeout", tolerance_timeout_, 2.5);
+		node_private.param("epsilon", epsilon_, 1e-6);
+		
 		//TODO:odometry subscribe
 		//TODO:velocity publisher
-		}
+	}
 	
 	//ok
 	void PurePursuit::odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
@@ -31,7 +31,7 @@ namespace pure_pursuit{
 		base_odom_.twist.twist.angular.z = msg->twist.twist.angular.z;
 		ROS_DEBUG("In the odometry callback with velocity values: (%.2f, %.2f, %.2f)",
 		base_odom_.twist.twist.linear.x, base_odom_.twist.twist.linear.y, base_odom_.twist.twist.angular.z);
-		}
+	}
 	
 	//ok
 	bool PurePursuit::setPlan(const std::vector<geometry_msgs::PoseStamped>& global_plan){
@@ -42,15 +42,15 @@ namespace pure_pursuit{
 			return false;
 		}
 		return true;
-		}
+	}
 	
 	//ok
-    bool PurePursuit::isGoalReached(){
+	bool PurePursuit::isGoalReached(){
 		if(goal_reached_time_ + ros::Duration(tolerance_timeout_) < ros::Time::now() && stopped()){
 			return true;
 		}
 		return false;
-		}
+	}
 	
 	//ok
 	bool PurePursuit::stopped(){
@@ -60,10 +60,12 @@ namespace pure_pursuit{
 		boost::mutex::scoped_lock lock(odom_lock_);
 		base_odom = base_odom_;
 		}
-		return fabs(base_odom.twist.twist.angular.z) <= rot_stopped_velocity_&& fabs(base_odom.twist.twist.linear.x) <= trans_stopped_velocity_&& fabs(base_odom.twist.twist.linear.y) <= trans_stopped_velocity_;
-		}
+		return fabs(base_odom.twist.twist.angular.z) <= rot_stopped_velocity_
+		&& fabs(base_odom.twist.twist.linear.x) <= trans_stopped_velocity_
+		&& fabs(base_odom.twist.twist.linear.y) <= trans_stopped_velocity_;
+	}
 			
-	//1 big todo		
+	//1 todo		
 	bool PurePursuit::computeVelocityCommands(geometry_msgs::Twist& cmd_vel){
 		//get the current pose of the robot in the fixed frame
 		tf::Stamped<tf::Pose> robot_pose;
@@ -73,7 +75,7 @@ namespace pure_pursuit{
 		cmd_vel = empty_twist;
 		return false;
 		}
-		//waypointte cepte lez go
+		//waypoint
 		tf::Stamped<tf::Pose> target_pose;
 		tf::Stamped<tf::Pose> cur_pose_of_waypoints;
 		tf::Stamped<tf::Pose> cur_pose_of_waypoints_next;
@@ -87,80 +89,74 @@ namespace pure_pursuit{
 		double arcDistance=getArcDistance(lookAheadDistance_, lookAheadAngle_);
 	
 		//TODO:arcDistance to vel command
-		}
+	}
 
-	//ok sıkıntı olabilir, parametrelerin geometry_msgs olmasi gerekir mi?
+	//ok sıkıntı olabilir, tf::poseda pose.position varmı bulamadım?
 	double PurePursuit::getLookAheadDistance(const tf::Pose& pose1, const tf::Pose& pose2){
-		tf::Vector3 v1(origin.pose.position.x,origin.pose.position.y,origin.pose.position.z);
-		tf::Vector3 v2(transformedPose.pose.position.x,transformedPose.pose.position.y,transformedPose.pose.position.z);
+		tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
+		tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
 		return tf::tfDistance(v1, v2);
-		}
+	}
 	
-	//ok sıkıntı olabilir, parametrelerin geometry_msgs olmasi gerekir mi?
+	//ok sıkıntı olabilir, tf::poseda pose.position varmı bulamadım?
 	double PurePursuit::getLookAheadAngle(const tf::Pose& pose1, const tf::Pose& pose2){
 		tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
 		tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
 		return tf::tfAngle(v1, v2);
-		}
+	}
 	
 	//ok
 	double PurePursuit::getArcDistance(double lookAheadDistance,double lookAheadAngle){
-		if (std::abs(std::sin(lookAheadAngle)) >= _epsilon)
+		if (std::abs(std::sin(lookAheadAngle)) >= epsilon_)
 			return lookAheadDistance/sin(lookAheadAngle)*lookAheadAngle;
 		else
 			return lookAheadDistance;
-		}
+	}
 	
 	//ok gibi gibi tam anlamadim
 	bool PurePursuit::transformGlobalPlan(const tf::TransformListener& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan, 
-      const costmap_2d::Costmap2DROS& costmap, const std::string& global_frame,
-      std::vector<geometry_msgs::PoseStamped>& transformed_plan){
-    const geometry_msgs::PoseStamped& plan_pose = global_plan[0];
-
-    transformed_plan.clear();
-
-    try{
-      if (!global_plan.size() > 0)
-      {
-        ROS_ERROR("Recieved plan with zero length");
-        return false;
-      }
-
-      tf::StampedTransform transform;
-      tf.lookupTransform(global_frame, ros::Time(), 
-          plan_pose.header.frame_id, plan_pose.header.stamp, 
-          plan_pose.header.frame_id, transform);
-
-      tf::Stamped<tf::Pose> tf_pose;
-      geometry_msgs::PoseStamped newer_pose;
-      //now we'll transform until points are outside of our distance threshold
-      for(unsigned int i = 0; i < global_plan.size(); ++i){
-        const geometry_msgs::PoseStamped& pose = global_plan[i];
-        poseStampedMsgToTF(pose, tf_pose);
-        tf_pose.setData(transform * tf_pose);
-        tf_pose.stamp_ = transform.stamp_;
-        tf_pose.frame_id_ = global_frame;
-        poseStampedTFToMsg(tf_pose, newer_pose);
-
-        transformed_plan.push_back(newer_pose);
-      }
-    }
-    catch(tf::LookupException& ex) {
-      ROS_ERROR("No Transform available Error: %s\n", ex.what());
-      return false;
-    }
-    catch(tf::ConnectivityException& ex) {
-      ROS_ERROR("Connectivity Error: %s\n", ex.what());
-      return false;
-    }
-    catch(tf::ExtrapolationException& ex) {
-      ROS_ERROR("Extrapolation Error: %s\n", ex.what());
-      if (global_plan.size() > 0)
-        ROS_ERROR("Global Frame: %s Plan Frame size %d: %s\n", global_frame.c_str(), (unsigned int)global_plan.size(), global_plan[0].header.frame_id.c_str());
-
-      return false;
-    }
-
-    return true;
-  }
+		const costmap_2d::Costmap2DROS& costmap, const std::string& global_frame,
+		std::vector<geometry_msgs::PoseStamped>& transformed_plan){
+			
+			const geometry_msgs::PoseStamped& plan_pose = global_plan[0];
+			transformed_plan.clear();
+			try{
+				if (!global_plan.size() > 0){
+					ROS_ERROR("Recieved plan with zero length");
+					return false;
+				}
+				tf::StampedTransform transform;
+				tf.lookupTransform(global_frame, ros::Time(), 
+				plan_pose.header.frame_id, plan_pose.header.stamp, 
+				plan_pose.header.frame_id, transform);
+				
+				tf::Stamped<tf::Pose> tf_pose;
+				geometry_msgs::PoseStamped newer_pose;
+				//now we'll transform until points are outside of our distance threshold
+				for(unsigned int i = 0; i < global_plan.size(); ++i){
+					const geometry_msgs::PoseStamped& pose = global_plan[i];
+					poseStampedMsgToTF(pose, tf_pose);
+					tf_pose.setData(transform * tf_pose);
+					tf_pose.stamp_ = transform.stamp_;
+					tf_pose.frame_id_ = global_frame;
+					poseStampedTFToMsg(tf_pose, newer_pose);
+					transformed_plan.push_back(newer_pose);
+				}
+			}
+			catch(tf::LookupException& ex) {
+				ROS_ERROR("No Transform available Error: %s\n", ex.what());
+				return false;
+			}
+			catch(tf::ConnectivityException& ex) {
+				ROS_ERROR("Connectivity Error: %s\n", ex.what());
+				return false;
+			}
+			catch(tf::ExtrapolationException& ex) {
+				ROS_ERROR("Extrapolation Error: %s\n", ex.what());
+				if (global_plan.size() > 0)
+					ROS_ERROR("Global Frame: %s Plan Frame size %d: %s\n", global_frame.c_str(), (unsigned int)global_plan.size(), global_plan[0].header.frame_id.c_str());
+				return false;
+			}
+			return true;
+	}
 };
