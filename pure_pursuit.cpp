@@ -91,15 +91,15 @@ namespace pure_pursuit{
 		//TODO:arcDistance to vel command
 	}
 
-	//ok sıkıntı olabilir, tf::poseda pose.position varmı bulamadım?
-	tf::Vector3::PurePursuit::getLookAheadDistance(const tf::Pose& pose1, const tf::Pose& pose2){
+	//ok sıkıntı olabilir, tf::poseda pose.position
+	double::PurePursuit::getLookAheadDistance(const tf::Pose& pose1, const tf::Pose& pose2){
 		tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
 		tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
 		return tf::tfDistance(v1, v2);
 	}
 	
-	//ok sıkıntı olabilir, tf::poseda pose.position varmı bulamadım?
-	tf::Vector3::PurePursuit::getLookAheadAngle(const tf::Pose& pose1, const tf::Pose& pose2){
+	//ok sıkıntı olabilir, tf::poseda pose.position 
+	double PurePursuit::getLookAheadAngle(const tf::Pose& pose1, const tf::Pose& pose2){
 		tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
 		tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
 		return tf::tfAngle(v1, v2);
@@ -113,7 +113,7 @@ namespace pure_pursuit{
 			return lookAheadDistance;
 	}
 	
-	//ok gibi gibi tam anlamadim
+	//ok -- cozuldu 
 	bool PurePursuit::transformGlobalPlan(const tf::TransformListener& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan, 
 		const costmap_2d::Costmap2DROS& costmap, const std::string& global_frame,
 		std::vector<geometry_msgs::PoseStamped>& transformed_plan){
