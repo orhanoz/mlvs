@@ -7,7 +7,7 @@ PLUGINLIB_DECLARE_CLASS(pure_pursuit, PurePursuit, pure_pursuit::PurePursuit, na
 namespace pure_pursuit{
     PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
 	
-	//3 todos
+	//1 todos
 	void PurePursuit::initialize(std::string name, tf::TransformListener* tf, costmap_2d::Costmap2DROS* costmap_ros){
 		tf_ = tf;
 		costmap_ros_ = costmap_ros;
@@ -18,9 +18,15 @@ namespace pure_pursuit{
 		//TODO:paramlar gelicek
 		node_private.param("tolerance_timeout", tolerance_timeout_, 2.5);
 		node_private.param("epsilon", epsilon_, 1e-6);
-		
-		//TODO:odometry subscribe
-		//TODO:velocity publisher
+		node_private.param("frequency", frequency_, 20.0);
+        node_private.param("initial_waypoint", initialWayPoint_, -1);
+        node_private.param("look_ahead_ratio",lookAheadRatio_, 1.0);
+        node_private.param
+        
+        ros::NodeHandle node;
+        odom_sub_ = node.subscribe<nav_msgs::Odometry>("odom", 1, boost::bind(&PoseFollower::odomCallback, this, _1));
+        vel_pub_ = node.advertise<geometry_msgs::Twist>("cmd_vel", 10);
+        ROS_DEBUG("Initialized");
 	}
 	
 	//ok
@@ -44,6 +50,11 @@ namespace pure_pursuit{
 		return true;
 	}
 	
+    
+    int PurePursuit::getNextWayPoint(int wayPoint){
+        
+    }
+    
 	//ok
 	bool PurePursuit::isGoalReached(){
 		if(goal_reached_time_ + ros::Duration(tolerance_timeout_) < ros::Time::now() && stopped()){
