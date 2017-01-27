@@ -82,8 +82,8 @@ namespace pure_pursuit{
 		tf::poseStampedMsgToTF(global_plan_[current_waypoint_], cur_pose_of_waypoints);
     
 		//lookahead angle distance
-		double lookAheadDistance_ = getLookAheadDistance(cur_pose_of_waypoints, robot_pose);
-		double lookAheadAngle_ = getLookAheadAngle(cur_pose_of_waypoints, robot_pose);
+		tf::Vector3 lookAheadDistance_ = getLookAheadDistance(cur_pose_of_waypoints, robot_pose);
+		tf::Vector3 lookAheadAngle_ = getLookAheadAngle(cur_pose_of_waypoints, robot_pose);
     
 		//arc distance
 		double arcDistance=getArcDistance(lookAheadDistance_, lookAheadAngle_);
@@ -92,21 +92,21 @@ namespace pure_pursuit{
 	}
 
 	//ok sıkıntı olabilir, tf::poseda pose.position varmı bulamadım?
-	double PurePursuit::getLookAheadDistance(const tf::Pose& pose1, const tf::Pose& pose2){
+	tf::Vector3::PurePursuit::getLookAheadDistance(const tf::Pose& pose1, const tf::Pose& pose2){
 		tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
 		tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
 		return tf::tfDistance(v1, v2);
 	}
 	
 	//ok sıkıntı olabilir, tf::poseda pose.position varmı bulamadım?
-	double PurePursuit::getLookAheadAngle(const tf::Pose& pose1, const tf::Pose& pose2){
+	tf::Vector3::PurePursuit::getLookAheadAngle(const tf::Pose& pose1, const tf::Pose& pose2){
 		tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
 		tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
 		return tf::tfAngle(v1, v2);
 	}
 	
 	//ok
-	double PurePursuit::getArcDistance(double lookAheadDistance,double lookAheadAngle){
+	double PurePursuit::getArcDistance(const tf::Vector3& lookAheadDistance,const tf::Vector3& lookAheadAngle){
 		if (std::abs(std::sin(lookAheadAngle)) >= epsilon_)
 			return lookAheadDistance/sin(lookAheadAngle)*lookAheadAngle;
 		else
