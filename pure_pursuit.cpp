@@ -21,7 +21,8 @@ namespace pure_pursuit{
 		node_private.param("frequency", frequency_, 20.0);
         node_private.param("initial_waypoint", initialWayPoint_, -1);
         node_private.param("look_ahead_ratio",lookAheadRatio_, 1.0);
-        node_private.param
+        node_private.param("samples", samples_, 100);
+        node_private.param("tolerance_timeout", tolerance_timeout_, 2.5);
         
         ros::NodeHandle node;
         odom_sub_ = node.subscribe<nav_msgs::Odometry>("odom", 1, boost::bind(&PoseFollower::odomCallback, this, _1));
@@ -50,11 +51,6 @@ namespace pure_pursuit{
 		return true;
 	}
 	
-    
-    int PurePursuit::getNextWayPoint(int wayPoint){
-        
-    }
-    
 	//ok
 	bool PurePursuit::isGoalReached(){
 		if(goal_reached_time_ + ros::Duration(tolerance_timeout_) < ros::Time::now() && stopped()){
@@ -98,8 +94,28 @@ namespace pure_pursuit{
     
 		//arc distance
 		double arcDistance=getArcDistance(lookAheadDistance_, lookAheadAngle_);
-	
-		//TODO:arcDistance to vel command
+        ROS_DEBUG("PoseFollower: current robot pose %f %f ==> %f", robot_pose.getOrigin().x(), robot_pose.getOrigin().y(), tf::getYaw(robot_pose.getRotation()));
+        ROS_DEBUG("PoseFollower: target robot pose %f %f ==> %f", target_pose.getOrigin().x(), target_pose.getOrigin().y(), tf::getYaw(target_pose.getRotation()));
+        
+        //curvature=(2*x)/(arcDistance)^2
+        float curvature=2*taget_pose.getOrigin().x();
+        
+		//TODO:arcDistance to vel command nasil cikar?
+        
+        
+        
+        
+        
+        //if we're not in the goal position, we need to update time
+        if(!in_goal_position)
+            goal_reached_time_ = ros::Time::now();
+
+        //check if we've reached our goal for long enough to succeed
+        if(goal_reached_time_ + ros::Duration(tolerance_timeout_) < ros::Time::now()){
+            geometry_msgs::Twist empty_twist;
+            cmd_vel = empty_twist;
+        }
+        return true;
 	}
 
 	//ok sıkıntı olabilir, tf::poseda pose.position
@@ -116,7 +132,7 @@ namespace pure_pursuit{
 		return tf::tfAngle(v1, v2);
 	}
 	
-	//ok
+	//ok parametreler doubleda olablü bakmak lazım
 	double PurePursuit::getArcDistance(const tf::Vector3& lookAheadDistance,const tf::Vector3& lookAheadAngle){
 		if (std::abs(std::sin(lookAheadAngle)) >= epsilon_)
 			return lookAheadDistance/sin(lookAheadAngle)*lookAheadAngle;
