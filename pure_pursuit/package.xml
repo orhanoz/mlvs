@@ -1,0 +1,36 @@
+<?xml version="1.0"?>
+<package>
+  <name>pure_pursuit</name>
+  <version>0.0.0</version>
+  <description>The pure_pursuit package</description>
+
+   <maintainer email="vehpi@todo.todo">vehpi</maintainer>
+
+
+  <license>TODO</license>
+<url>http://ros.org/wiki/</url>
+	
+	<buildtool_depend>catkin</buildtool_depend>
+
+<build_depend>nav_core</build_depend>
+  <build_depend>base_local_planner</build_depend>
+  <build_depend>costmap_2d</build_depend>
+  <build_depend>nav_msgs</build_depend>
+  
+  <build_depend>pluginlib</build_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>tf</build_depend>
+  <run_depend>base_local_planner</run_depend>
+  <run_depend>costmap_2d</run_depend>
+  <run_depend>nav_msgs</run_depend>
+  <run_depend>nav_core</run_depend>
+  <run_depend>pluginlib</run_depend>
+  <run_depend>roscpp</run_depend>
+  <run_depend>tf</run_depend>
+
+
+   <export>
+  <cpp cflags="-I${prefix}/include" lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib -lpure_pursuit" />
+    <nav_core plugin="${prefix}/blp_plugin.xml" />
+  </export>
+</package>

@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(pure_pursuit)
+set(pure_pursuit_ROS_DEPS nav_core base_local_planner costmap_2d roscpp tf nav_msgs pluginlib)
+
+find_package(catkin REQUIRED COMPONENTS ${pure_pursuit_ROS_DEPS})
+
+include_directories(include ${catkin_INCLUDE_DIRS})
+link_directories(${catkin_LIBRARY_DIRS})
+
+catkin_package(
+  INCLUDE_DIRS include
+  CATKIN_DEPENDS ${pure_pursuit_ROS_DEPS}
+)
+
+add_library(pure_pursuit src/pure_pursuit.cpp)
+target_link_libraries(pure_pursuit ${catkin_LIBRARIES})
+
+
+install(TARGETS pure_pursuit
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+
