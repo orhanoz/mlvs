@@ -7,7 +7,7 @@ PLUGINLIB_DECLARE_CLASS(pure_pursuit, PurePursuit, pure_pursuit::PurePursuit, na
 namespace pure_pursuit{
     PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
     //1 todos
-    void PurePursuit::initialize(std::string name, tf::TransformListener* tf, costmap_2d::Costmap2DROS* costmap_ros){
+    void PurePursuit::initialize(std::string name, tf::TransformListener* tf , costmap_2d::Costmap2DROS* costmap_ros){
         tf_ = tf;
         costmap_ros_ = costmap_ros;
         current_waypoint_ = 0;
@@ -31,23 +31,25 @@ namespace pure_pursuit{
         path_sub_ = node.subscribe<nav_msgs::Path>("path", 1, boost::bind(&PurePursuit::pathCallback, this, _1));
         
         geometry_msgs::Twist currentVelocity_;
-        std::string poseFrameId_;
         ROS_DEBUG("Initialized");
     }
 	
     //ok
     void PurePursuit::odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
         boost::mutex::scoped_lock lock(odom_lock_);
+        //ROS_INFO("odomcallback");
         base_odom_.twist.twist.linear.x = msg->twist.twist.linear.x;
         base_odom_.twist.twist.linear.y = msg->twist.twist.linear.y;
         base_odom_.twist.twist.angular.z = msg->twist.twist.angular.z;
         currentVelocity_ = msg->twist.twist;
         ROS_DEBUG("In the odometry callback with velocity values: (%.2f, %.2f, %.2f)",
-        base_odom_.twist.twist.linear.x, base_odom_.twist.twist.linear.y, base_odom_.twist.twist.angular.z);
+        currentVelocity_.linear.x, currentVelocity_.linear.y, currentVelocity_.angular.z);
     }
 	
     //ok
     void PurePursuit::pathCallback(const nav_msgs::Path::ConstPtr& msg) {
+        boost::mutex::scoped_lock lock(path_lock_);
+        ROS_INFO("pathcallback");
         currentReferencePath_ = *msg;
         nextWayPoint_ = -1;
         for(int i = 0; i < currentReferencePath_.poses.size(); i++){
@@ -60,6 +62,7 @@ namespace pure_pursuit{
     
     //ok
     bool PurePursuit::setPlan(const std::vector<geometry_msgs::PoseStamped>& global_plan){
+        ROS_INFO("set_plan");
         current_waypoint_ = 0;
         goal_reached_time_ = ros::Time::now();
         if(!transformGlobalPlan(*tf_, global_plan, *costmap_ros_, costmap_ros_->getGlobalFrameID(), global_plan_)){
@@ -77,7 +80,7 @@ namespace pure_pursuit{
         return false;
     }
 	
-    //ok
+    //ok 
     bool PurePursuit::stopped(){
         //copy over the odometry information
         nav_msgs::Odometry base_odom;
@@ -90,15 +93,18 @@ namespace pure_pursuit{
         && fabs(base_odom.twist.twist.linear.y) <= trans_stopped_velocity_;
     }
 	
+    //ok
     geometry_msgs::PoseStamped PurePursuit::getCurrentPose(){
         geometry_msgs::PoseStamped pose, transformedPose;
         pose.header.frame_id = poseFrameId_;
+        ROS_INFO("PP::getCurrent %f %f ==> %f,,,,,%f %f %f %f", pose.pose.position.x, pose.pose.position.y, pose.pose.position.z,pose.pose.orientation.x,pose.pose.orientation.y,pose.pose.orientation.z,pose.pose.orientation.w);
         try {
-            tfListener_.transformPose(currentReferencePath_.header.frame_id,
+            tfListener_.transformPose(pose.header.frame_id,
             pose, transformedPose);
+            ROS_INFO("PP::TRY %f %f ==> %f", pose.pose.position.x, pose.pose.position.y, pose.pose.position.z);
         }
         catch (tf::TransformException& exception) {
-            ROS_ERROR_STREAM("PurePursuit::getCurrentPose: " << 
+            ROS_ERROR_STREAM("PurePursuit::getCurrentPose:ALOOOO " << 
             exception.what());
         }
         return transformedPose;
@@ -127,8 +133,8 @@ namespace pure_pursuit{
         //arc distance
         double arcDistance=getArcDistance(lookAheadDistance_, lookAheadAngle_);
         
-        ROS_DEBUG("PurePursuit: current robot pose %f %f ==> %f", robot_pose.getOrigin().x(), robot_pose.getOrigin().y(), tf::getYaw(robot_pose.getRotation()));
-        ROS_DEBUG("PurePursuit: target robot pose %f %f ==> %f", target_pose.getOrigin().x(), target_pose.getOrigin().y(), tf::getYaw(target_pose.getRotation()));
+        //ROS_DEBUG("PP::CompuVelo current robot pose %f %f ==> %f", robot_pose.getOrigin().x(), robot_pose.getOrigin().y(), tf::getYaw(robot_pose.getRotation()));
+        //ROS_DEBUG("PP::CompuVelo target robot pose %f %f ==> %f", target_pose.getOrigin().x(), target_pose.getOrigin().y(), tf::getYaw(target_pose.getRotation()));
 
         //TODO:arcDistance to vel command nasil cikar?
         
@@ -141,7 +147,7 @@ namespace pure_pursuit{
         return lookAheadRatio_*currentVelocity_.linear.x;
     }
 
-    //ok sıkıntı var tf::poseda pose.position geometry_msgs::PoseStamped& pose
+    //ok cozuldu
     double PurePursuit::getLookAheadDistance(const geometry_msgs::PoseStamped& pose1){
         geometry_msgs::PoseStamped origin = getCurrentPose();
         geometry_msgs::PoseStamped transformedPose;
@@ -190,7 +196,8 @@ namespace pure_pursuit{
     }
 
     //yeni eklendi
-    int PurePursuit::getNextWayPoint(int wayPoint){   
+    int PurePursuit::getNextWayPoint(int wayPoint){ 
+        ROS_INFO("PP::getnextwaypoint.start");  
         if (!currentReferencePath_.poses.empty()) {
             if (nextWayPoint_ >= 0) {
                 geometry_msgs::PoseStamped origin = getCurrentPose();
@@ -219,6 +226,7 @@ namespace pure_pursuit{
     //getinter
     bool PurePursuit::getInterpolatedPose(int wayPoint,
         geometry_msgs::PoseStamped& interpolatedPose){
+            ROS_INFO("PP::getinterpolatedpose.start"); 
         if (!currentReferencePath_.poses.empty()) {
             if (wayPoint > 0) {
                 double l_t = getLookAheadThreshold();
@@ -270,6 +278,7 @@ namespace pure_pursuit{
 
     //step
     bool PurePursuit::step(geometry_msgs::Twist& twist) {
+        ROS_INFO("PP::step.start"); 
         twist.linear.x = 0.0;
         twist.linear.y = 0.0;
         twist.linear.z = 0.0;
@@ -334,6 +343,7 @@ namespace pure_pursuit{
 					poseStampedTFToMsg(tf_pose, newer_pose);
 					transformed_plan.push_back(newer_pose);
 				}
+                ROS_INFO("glob transform");
 			}
 			catch(tf::LookupException& ex) {
 				ROS_ERROR("No Transform available Error: %s\n", ex.what());
