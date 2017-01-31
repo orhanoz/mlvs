@@ -17,7 +17,7 @@ namespace pure_pursuit {
     class PurePursuit : public nav_core::BaseLocalPlanner {
         public:
             PurePursuit();
-            void initialize(std::string name, tf::TransformListener* tf, costmap_2d::Costmap2DROS* costmap_ros);
+            void initialize(std::string name, tf::TransformListener* tf,costmap_2d::Costmap2DROS* costmap_ros);
             bool isGoalReached();
             bool setPlan(const std::vector<geometry_msgs::PoseStamped>& global_plan);
             bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel);
@@ -25,7 +25,6 @@ namespace pure_pursuit {
             double getLookAheadDistance(const geometry_msgs::PoseStamped& pose1);
             double getLookAheadAngle(const geometry_msgs::PoseStamped& pose1);
             double getArcDistance(double lookAheadDistance,double lookAheadAngle);
-            //hatalar
             int getNextWayPoint(int wayPoint);
             bool getInterpolatedPose(int wayPoint,geometry_msgs::PoseStamped& interpolatedPose);
             bool step(geometry_msgs::Twist& twist);
@@ -45,6 +44,7 @@ namespace pure_pursuit {
         bool stopped();
       
         tf::TransformListener* tf_;
+        tf::TransformListener tfListener_;
       
         costmap_2d::Costmap2DROS* costmap_ros_;
       
@@ -63,13 +63,14 @@ namespace pure_pursuit {
         boost::mutex odom_lock_;
         ros::Subscriber odom_sub_;
         nav_msgs::Odometry base_odom_;
-      
+
+        boost::mutex path_lock_;
         ros::Subscriber path_sub_;
         nav_msgs::Path currentReferencePath_;
         
         geometry_msgs::Twist currentVelocity_;
         std::string poseFrameId_;
-        tf::TransformListener tfListener_;
+
         
         std::vector<geometry_msgs::PoseStamped> global_plan_;
         base_local_planner::TrajectoryPlannerROS collision_planner_;
