@@ -6,7 +6,7 @@ PLUGINLIB_DECLARE_CLASS(pure_pursuit, PurePursuit, pure_pursuit::PurePursuit, na
 
 namespace pure_pursuit{
     PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
-	//1 todos
+    //1 todos
     void PurePursuit::initialize(std::string name, tf::TransformListener* tf, costmap_2d::Costmap2DROS* costmap_ros){
         tf_ = tf;
         costmap_ros_ = costmap_ros;
@@ -22,19 +22,16 @@ namespace pure_pursuit{
         node_private.param("look_ahead_ratio",lookAheadRatio_, 1.0);
         node_private.param("samples", samples_, 100);
         node_private.param("tolerance_timeout", tolerance_timeout_, 2.5);
-        node_private.param("holonomic", holonomic_, false); //sorulacak
+        node_private.param("holonomic", holonomic_, false); //soru
         
         ros::NodeHandle node;
         odom_sub_ = node.subscribe<nav_msgs::Odometry>("odom", 1, boost::bind(&PurePursuit::odomCallback, this, _1));
         vel_pub_ = node.advertise<geometry_msgs::Twist>("cmd_vel", 10);
         //path??
-        path_sub_ = node.subscribe<nav_msgs::Path>("path", 1, boost::bind(&PurePursuit::odomCallback, this, _1));
+        path_sub_ = node.subscribe<nav_msgs::Path>("path", 1, boost::bind(&PurePursuit::pathCallback, this, _1));
         
         geometry_msgs::Twist currentVelocity_;
-        nav_msgs::Path currentReferencePath_;
         std::string poseFrameId_;
-        int nextWayPoint_;
-        double velocity_;
         ROS_DEBUG("Initialized");
     }
 	
@@ -50,9 +47,15 @@ namespace pure_pursuit{
     }
 	
     //ok
-    void PurePursuit::pathCallback(const nav_msgs::Path& msg) {
-        currentReferencePath_ = msg;
+    void PurePursuit::pathCallback(const nav_msgs::Path::ConstPtr& msg) {
+        currentReferencePath_ = *msg;
         nextWayPoint_ = -1;
+        for(int i = 0; i < currentReferencePath_.poses.size(); i++){
+            ROS_INFO("Current Reference Path %d:\n",i);
+            ROS_INFO("X: %lf\n",currentReferencePath_.poses[i].pose.position.x);    
+            ROS_INFO("Y: %lf\n",currentReferencePath_.poses[i].pose.position.y);    
+            ROS_INFO("Z: %lf\n",currentReferencePath_.poses[i].pose.position.z);
+        }
     }
     
     //ok
@@ -91,7 +94,7 @@ namespace pure_pursuit{
         geometry_msgs::PoseStamped pose, transformedPose;
         pose.header.frame_id = poseFrameId_;
         try {
-            _tfListener.transformPose(currentReferencePath_.header.frame_id,
+            tfListener_.transformPose(currentReferencePath_.header.frame_id,
             pose, transformedPose);
         }
         catch (tf::TransformException& exception) {
@@ -111,15 +114,16 @@ namespace pure_pursuit{
             cmd_vel = empty_twist;
             return false;
         }
-		//waypoint hangisi hangisi ?
+		//waypoint hangisi hangisi ? debug lazım gerek kalmamıs olabilir?
         tf::Stamped<tf::Pose> target_pose;
         tf::Stamped<tf::Pose> cur_pose_of_waypoints;
         tf::Stamped<tf::Pose> cur_pose_of_waypoints_next;
         tf::poseStampedMsgToTF(global_plan_[current_waypoint_], cur_pose_of_waypoints);
-    
-        //lookahead angle,distance
-        tf::Vector3 lookAheadDistance_ = getLookAheadDistance(cur_pose_of_waypoints, robot_pose);
-        tf::Vector3 lookAheadAngle_ = getLookAheadAngle(cur_pose_of_waypoints, robot_pose);
+        //pose
+        geometry_msgs::PoseStamped pose;
+        //lookahead angle,distance: gerek kalmayabilir step icinde var..
+        double lookAheadDistance_ = getLookAheadDistance(pose);
+        double lookAheadAngle_ = getLookAheadAngle(pose);
         //arc distance
         double arcDistance=getArcDistance(lookAheadDistance_, lookAheadAngle_);
         
@@ -128,15 +132,7 @@ namespace pure_pursuit{
 
         //TODO:arcDistance to vel command nasil cikar?
         
-        //if we're not in the goal position, we need to update time
-        if(!in_goal_position)
-            goal_reached_time_ = ros::Time::now();
 
-        //check if we've reached our goal for long enough to succeed
-        if(goal_reached_time_ + ros::Duration(tolerance_timeout_) < ros::Time::now()){
-            geometry_msgs::Twist empty_twist;
-            cmd_vel = empty_twist;
-        }
         return true;
     }
 
@@ -145,22 +141,48 @@ namespace pure_pursuit{
         return lookAheadRatio_*currentVelocity_.linear.x;
     }
 
-    //ok sıkıntı olabilir, tf::poseda pose.position
-    double::PurePursuit::getLookAheadDistance(const tf::Pose& pose1, const tf::Pose& pose2){
-        tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
-        tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
+    //ok sıkıntı var tf::poseda pose.position geometry_msgs::PoseStamped& pose
+    double PurePursuit::getLookAheadDistance(const geometry_msgs::PoseStamped& pose1){
+        geometry_msgs::PoseStamped origin = getCurrentPose();
+        geometry_msgs::PoseStamped transformedPose;
+        
+        try {
+            tfListener_.transformPose(currentReferencePath_.header.frame_id,
+            pose1, transformedPose);
+        }
+        catch (tf::TransformException& exception) {
+            ROS_ERROR_STREAM("PurePursuit::getLookAheadDistance: " << 
+            exception.what());
+            return -1.0;
+        }
+        
+        tf::Vector3 v1(origin.pose.position.x,origin.pose.position.y,origin.pose.position.z);
+        tf::Vector3 v2(transformedPose.pose.position.x,transformedPose.pose.position.y,transformedPose.pose.position.z);
         return tf::tfDistance(v1, v2);
     }
 	
     //ok sıkıntı olabilir, tf::poseda pose.position 
-    double PurePursuit::getLookAheadAngle(const tf::Pose& pose1, const tf::Pose& pose2){
-        tf::Vector3 v1(pose2.pose.position.x,pose2.pose.position.y,pose2.pose.position.z);
-        tf::Vector3 v2(pose1.pose.position.x,pose1.pose.position.y,pose1.pose.position.z);
+    double PurePursuit::getLookAheadAngle(const geometry_msgs::PoseStamped& pose1){
+        geometry_msgs::PoseStamped origin = getCurrentPose();
+        geometry_msgs::PoseStamped transformedPose;
+        
+        try {
+            tfListener_.transformPose(currentReferencePath_.header.frame_id,
+            pose1, transformedPose);
+        }
+        catch (tf::TransformException& exception) {
+            ROS_ERROR_STREAM("PurePursuit::getLookAheadDistance: " << 
+            exception.what());
+            return -1.0;
+        }
+        
+        tf::Vector3 v1(origin.pose.position.x,origin.pose.position.y,origin.pose.position.z);
+        tf::Vector3 v2(transformedPose.pose.position.x,transformedPose.pose.position.y,transformedPose.pose.position.z);
         return tf::tfAngle(v1, v2);
     }
 	
     //ok parametreler doubleda olablü bakmak lazım
-    double PurePursuit::getArcDistance(const tf::Vector3& lookAheadDistance,const tf::Vector3& lookAheadAngle){
+    double PurePursuit::getArcDistance(double lookAheadDistance,double lookAheadAngle){
         if (std::abs(std::sin(lookAheadAngle)) >= epsilon_)
             return lookAheadDistance/sin(lookAheadAngle)*lookAheadAngle;
         else
