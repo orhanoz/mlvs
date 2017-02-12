@@ -21,9 +21,6 @@ namespace pure_pursuit {
             bool isGoalReached();
             bool setPlan(const std::vector<geometry_msgs::PoseStamped>& global_plan);
             bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel);
-            //int getNextWayPoint(int wayPoint);
-            bool getInterpolatedPose(int wayPoint,geometry_msgs::PoseStamped& interpolatedPose);
-            //bool step(geometry_msgs::Twist& twist);
             //bool sendCmdVel(geometry_msgs::Twist& cmd_vel);
             double getLookAheadThreshold();
             double getLookAheadDistance(int waypoint);
@@ -57,7 +54,6 @@ namespace pure_pursuit {
       
         double K_trans_, K_rot_, tolerance_trans_, tolerance_rot_;
 
-        // nlimpert - 2015-04-10: lookahead tweak
         int lookahead_count_;
         double lookahead_weight_;
         double tolerance_timeout_;
@@ -69,14 +65,9 @@ namespace pure_pursuit {
         boost::mutex odom_lock_;
         ros::Subscriber odom_sub_;
         nav_msgs::Odometry base_odom_;
-
-        //boost::mutex path_lock_;
-        //ros::Subscriber path_sub_;
-        //nav_msgs::Path currentReferencePath_;
-        
+    
         geometry_msgs::Twist currentVelocity_;
         std::string poseFrameId_;
-
         
         std::vector<geometry_msgs::PoseStamped> global_plan_;
         base_local_planner::TrajectoryPlannerROS collision_planner_;
@@ -85,8 +76,7 @@ namespace pure_pursuit {
         double max_heading_diff_before_moving_;
         bool turn_in_place_first_,allow_backwards_;
         double arcDistance_;
-        double trans_stopped_velocity_, rot_stopped_velocity_;
-        unsigned int current_waypoint_; 
+        double trans_stopped_velocity_, rot_stopped_velocity_; 
         int samples_,nextWayPoint_,initialWayPoint_;
         double velocity_,epsilon_,frequency_,lookAheadRatio_;
     };
