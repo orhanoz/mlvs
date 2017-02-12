@@ -1,4 +1,4 @@
-//pure_pursuit5.cpp
+//pure_pursuit7.cpp
 #include <pure_pursuit/pure_pursuit.h>
 #include <pluginlib/class_list_macros.h>
 #include <visualization_msgs/Marker.h>
@@ -6,7 +6,7 @@
 PLUGINLIB_DECLARE_CLASS(pure_pursuit, PurePursuit, pure_pursuit::PurePursuit, nav_core::BaseLocalPlanner)
 
 namespace pure_pursuit{
-    PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
+  PurePursuit::PurePursuit(): tf_(NULL), costmap_ros_(NULL) {}
 	
     //ok
 	void PurePursuit::initialize(std::string name, tf::TransformListener* tf, costmap_2d::Costmap2DROS* costmap_ros){
@@ -67,8 +67,6 @@ namespace pure_pursuit{
     
     //ok
 	bool PurePursuit::setPlan(const std::vector<geometry_msgs::PoseStamped>& global_plan){
-		current_waypoint_ = 0;
-        nextWayPoint_ = 1;
 		goal_reached_time_ = ros::Time::now();
 		if(!transformGlobalPlan(*tf_, global_plan, *costmap_ros_, costmap_ros_->getGlobalFrameID(), global_plan_)){
 			ROS_ERROR("Could not transform the global plan to the frame of the controller");
@@ -98,96 +96,100 @@ namespace pure_pursuit{
 		&& fabs(base_odom.twist.twist.linear.y) <= trans_stopped_velocity_;
 	}
     
-    //ok
-    bool PurePursuit::transformGlobalPlan(const tf::TransformListener& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan, 
-		const costmap_2d::Costmap2DROS& costmap, const std::string& global_frame,
+  //ok
+  bool PurePursuit::transformGlobalPlan(const tf::TransformListener& tf, const std::vector<geometry_msgs::PoseStamped>& global_plan, 
+    const costmap_2d::Costmap2DROS& costmap, const std::string& global_frame,
 		std::vector<geometry_msgs::PoseStamped>& transformed_plan){
 			
-			const geometry_msgs::PoseStamped& plan_pose = global_plan[0];
-			transformed_plan.clear();
-			try{
-				if (!global_plan.size() > 0){
-					ROS_ERROR("Recieved plan with zero length");
-					return false;
-				}
-				tf::StampedTransform transform;
-				tf.lookupTransform(global_frame, ros::Time(), 
-				plan_pose.header.frame_id, plan_pose.header.stamp, 
-				plan_pose.header.frame_id, transform);
-				
-				tf::Stamped<tf::Pose> tf_pose;
-				geometry_msgs::PoseStamped newer_pose;
-				//now we'll transform until points are outside of our distance threshold
-				for(unsigned int i = 0; i < global_plan.size(); ++i){
-					const geometry_msgs::PoseStamped& pose = global_plan[i];
-					poseStampedMsgToTF(pose, tf_pose);
-					tf_pose.setData(transform * tf_pose);
-					tf_pose.stamp_ = transform.stamp_;
-					tf_pose.frame_id_ = global_frame;
-					poseStampedTFToMsg(tf_pose, newer_pose);
-					transformed_plan.push_back(newer_pose);
-                    //ROS_INFO("glob: %f %f %f",pose.pose.position.x,pose.pose.position.y,pose.pose.position.z);
-                    //ROS_INFO("newer:%f %f %f",newer_pose.pose.position.x,newer_pose.pose.position.y,newer_pose.pose.position.z);
-				}
-			}
-			catch(tf::LookupException& ex) {
-				ROS_ERROR("No Transform available Error: %s\n", ex.what());
+		const geometry_msgs::PoseStamped& plan_pose = global_plan[0];
+		transformed_plan.clear();
+		try{
+			if (!global_plan.size() > 0){
+				ROS_ERROR("Recieved plan with zero length");
 				return false;
 			}
-			catch(tf::ConnectivityException& ex) {
-				ROS_ERROR("Connectivity Error: %s\n", ex.what());
-				return false;
-			}
-			catch(tf::ExtrapolationException& ex) {
-				ROS_ERROR("Extrapolation Error: %s\n", ex.what());
-				if (global_plan.size() > 0)
-					ROS_ERROR("Global Frame: %s Plan Frame size %d: %s\n", global_frame.c_str(), (unsigned int)global_plan.size(), global_plan[0].header.frame_id.c_str());
-				return false;
-			}
-			return true;
+  		tf::StampedTransform transform;
+  		tf.lookupTransform(global_frame, ros::Time(), 
+  			plan_pose.header.frame_id, plan_pose.header.stamp, 
+  			plan_pose.header.frame_id, transform);
+  				
+  		tf::Stamped<tf::Pose> tf_pose;
+  		geometry_msgs::PoseStamped newer_pose;
+  		//now we'll transform until points are outside of our distance threshold
+  		for(unsigned int i = 0; i < global_plan.size(); ++i){
+  			const geometry_msgs::PoseStamped& pose = global_plan[i];
+  			poseStampedMsgToTF(pose, tf_pose);
+  			tf_pose.setData(transform * tf_pose);
+  			tf_pose.stamp_ = transform.stamp_;
+  			tf_pose.frame_id_ = global_frame;
+  			poseStampedTFToMsg(tf_pose, newer_pose);
+  			transformed_plan.push_back(newer_pose);
+        //ROS_INFO("glob: %f %f %f",pose.pose.position.x,pose.pose.position.y,pose.pose.position.z);
+        //ROS_INFO("newer:%f %f %f",newer_pose.pose.position.x,newer_pose.pose.position.y,newer_pose.pose.position.z);
+  		}
+		}
+		catch(tf::LookupException& ex) {
+			ROS_ERROR("No Transform available Error: %s\n", ex.what());
+			return false;
+		}
+		catch(tf::ConnectivityException& ex) {
+			ROS_ERROR("Connectivity Error: %s\n", ex.what());
+			return false;
+		}
+		catch(tf::ExtrapolationException& ex) {
+			ROS_ERROR("Extrapolation Error: %s\n", ex.what());
+			if (global_plan.size() > 0)
+				ROS_ERROR("Global Frame: %s Plan Frame size %d: %s\n", global_frame.c_str(), (unsigned int)global_plan.size(), global_plan[0].header.frame_id.c_str());
+			return false;
+		}
+		return true;
 	}
 
-    bool PurePursuit::computeVelocityCommands(geometry_msgs::Twist& cmd_vel){
-        int wayPoint=getNextWP();
-        ROS_INFO("WAYPOINT: %d",wayPoint);
-        if(wayPoint>=0){
-            //getCurrentPose
-            tf::Stamped<tf::Pose> robot_pose;
-            if(!costmap_ros_->getRobotPose(robot_pose)){
-                ROS_ERROR("Can't get robot pose");
-                geometry_msgs::Twist empty_twist;
-                cmd_vel = empty_twist;
-                return false;
-            }
-            ROS_INFO("Current Pose: %f %f %f ",robot_pose.getOrigin().x(),robot_pose.getOrigin().y(),tf::getYaw(robot_pose.getRotation()));
-            //getTargetPose
-            tf::Stamped<tf::Pose> target_pose;
-            tf::poseStampedMsgToTF(global_plan_[wayPoint], target_pose);
-            ROS_INFO("Current waypoint pose: %f %f %f",target_pose.getOrigin().x(),target_pose.getOrigin().y(),tf::getYaw(target_pose.getRotation()));
-            //getVehicleCoord
-            double dx = target_pose.getOrigin().x() - robot_pose.getOrigin().x();
-            double dy = target_pose.getOrigin().y() - robot_pose.getOrigin().y();
-            double x1 = std::cos(tf::getYaw(robot_pose.getRotation())) * dx + std::sin(tf::getYaw(robot_pose.getRotation())) * dy;
-            double y1 = -1*std::sin(tf::getYaw(robot_pose.getRotation())) * dx + std::cos(tf::getYaw(robot_pose.getRotation())) * dy;
-            //calcCurve
-            double curve=2/((x1*x1)+(y1*y1))*(-1*y1);
-            ROS_INFO("x1,y1,curve: %f %f %f",x1,y1,curve);
-            double linearVelocity=0.1;
-            double angularVelocity=0.0;
-            if(std::abs(curve)>0.2){
-                angularVelocity= sign(curve)*std::max((linearVelocity*curve),min_vel_th_);
-                if(linearVelocity<1.9)
-                linearVelocity=linearVelocity+0.1;
-            }
-            else{
-                angularVelocity=0.0;
-                //linearVelocity=linearVelocity+0.1;
-            }
-            cmd_vel.linear.x=linearVelocity;
-            cmd_vel.angular.z=angularVelocity;
-            ROS_INFO("HOOOO: %f %f",cmd_vel.linear.x,cmd_vel.angular.z);
+  bool PurePursuit::computeVelocityCommands(geometry_msgs::Twist& cmd_vel){
+    int wayPoint=getNextWP();
+    ROS_INFO("WAYPOINT: %d",wayPoint);
+    if(wayPoint>=0){
+      //getCurrentPose
+      tf::Stamped<tf::Pose> robot_pose;
+      if(!costmap_ros_->getRobotPose(robot_pose)){
+        ROS_ERROR("Can't get robot pose");
+        geometry_msgs::Twist empty_twist;
+        cmd_vel = empty_twist;
+        return false;
+      }
+      ROS_INFO("Current Pose: %f %f %f ",robot_pose.getOrigin().x(),robot_pose.getOrigin().y(),tf::getYaw(robot_pose.getRotation()));
+      //getTargetPose
+      tf::Stamped<tf::Pose> target_pose;
+      tf::poseStampedMsgToTF(global_plan_[wayPoint], target_pose);
+      ROS_INFO("Current waypoint pose: %f %f %f",target_pose.getOrigin().x(),target_pose.getOrigin().y(),tf::getYaw(target_pose.getRotation()));
+      
+      //getVehicleCoord
+      double dx = target_pose.getOrigin().x() - robot_pose.getOrigin().x();
+      double dy = target_pose.getOrigin().y() - robot_pose.getOrigin().y();
+      double x1 = std::cos(tf::getYaw(robot_pose.getRotation())) * dx + std::sin(tf::getYaw(robot_pose.getRotation())) * dy;
+      double y1 = -1*std::sin(tf::getYaw(robot_pose.getRotation())) * dx + std::cos(tf::getYaw(robot_pose.getRotation())) * dy;
+
+      //calcCurve
+      double curve=2/((x1*x1)+(y1*y1))*(-1*y1);
+      ROS_INFO("x1,y1,curve: %f %f %f",x1,y1,curve);
+      double linearVelocity=0.1;
+      double angularVelocity=0.0;
+      double lookAheadAngle=getLookAheadAngle(wayPoint);
+      double lookAheadDistance=getLookAheadDistance(wayPoint);
             
-       }
+      //double radius = 0.5*(lookAheadDistance/std::sin(lookAheadAngle));
+      //angularVelocity= sign(curve)*std::max((linearVelocity*curve),min_vel_th_);
+      if (std::abs(std::sin(lookAheadAngle)) >= epsilon_) {
+          double radius = 0.5*(lookAheadDistance/std::sin(lookAheadAngle));
+          double linearVelocity = 0.2;
+          if (std::abs(radius) >= epsilon_)
+            angularVelocity = linearVelocity/radius;
+      }
+      cmd_vel.linear.x=linearVelocity;
+      cmd_vel.angular.z=angularVelocity;
+      ROS_INFO("HOOOO: %f %f",cmd_vel.linear.x,cmd_vel.angular.z);
+      
+   }
        
     }
    
