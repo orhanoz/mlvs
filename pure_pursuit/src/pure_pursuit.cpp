@@ -191,110 +191,111 @@ namespace pure_pursuit{
       
    }
        
-    }
+  }
+
    
-   //error free, not tested
-   int PurePursuit::getClosestWP(){
-       if(global_plan_.size()>0){
-           int closestWP=-1;
-           double minDistance = -1.0;
-           for(int i=0;i<global_plan_.size();++i){
-               double distance=getArcDistance(i);
-               if((minDistance<0.0) || (distance<minDistance)){
-                   closestWP=i;
-                   minDistance=distance;
-               }
-           }
-           return closestWP;
-       }
-       return -1;
-   }
-   
-   //works but needed to be tested with linear velo other than 0
-   int PurePursuit::getNextWP(){
-       int closestWayPoint=getClosestWP();
-       ROS_INFO("closestWP: %d",closestWayPoint);
-       if(global_plan_.size()>0 && closestWayPoint>=0){
-            geometry_msgs::PoseStamped closest_waypoint_pose;
-            tf::Vector3 v_1(global_plan_[closestWayPoint].pose.position.x,
-                global_plan_[closestWayPoint].pose.position.y,
-                global_plan_[closestWayPoint].pose.position.z);
-            double lookAheadThreshold = getLookAheadThreshold();
-            for (int i = closestWayPoint; i < global_plan_.size();++i){
-                tf::Vector3 v_2(global_plan_[i].pose.position.x,
-                    global_plan_[i].pose.position.y,
-                    global_plan_[i].pose.position.z);
-                    ROS_INFO("DIST&THRESH: %f %f",tf::tfDistance(v_1, v_2),lookAheadThreshold);
-                if (tf::tfDistance(v_1, v_2) > lookAheadThreshold){
-                    ROS_INFO("RETURNING: %d",i);
-                    return i;
-                }
-            }
-            return closestWayPoint;
+  //error free, not tested
+  int PurePursuit::getClosestWP(){
+    if(global_plan_.size()>0){
+      int closestWP=-1;
+      double minDistance = -1.0;
+      for(int i=0;i<global_plan_.size();++i){
+        double distance=getArcDistance(i);
+        if((minDistance<0.0) || (distance<minDistance)){
+          closestWP=i;
+          minDistance=distance;
         }
-    return -1;   
-    }
-   
-   
-   
-   
-   
-   
-    //ok ama kusuratta fark cikiyor
-    double PurePursuit::getLookAheadThreshold(){
-        return lookAheadRatio_*base_odom_.twist.twist.linear.x;
-    } 
-    
-    //ok & tested
-    double PurePursuit::getLookAheadDistance(int waypoint){
-        tf::Stamped<tf::Pose> robot_pose;
-        if(!costmap_ros_->getRobotPose(robot_pose)){
-            ROS_ERROR("Can't get robot pose");
-            return -1.0;
-        }
-        
-        geometry_msgs::PoseStamped origin;
-        poseStampedTFToMsg(robot_pose, origin);
-        
-        tf::Vector3 v1(origin.pose.position.x,
-                       origin.pose.position.y,
-                       origin.pose.position.z);
-        tf::Vector3 v2(global_plan_[waypoint].pose.position.x,
-                       global_plan_[waypoint].pose.position.y,
-                       global_plan_[waypoint].pose.position.z);
-        
-        return tf::tfDistance(v1, v2);
       }
-    
-    //ok & tested
-    double PurePursuit::getLookAheadAngle(int waypoint){
-        tf::Stamped<tf::Pose> robot_pose;
-        if(!costmap_ros_->getRobotPose(robot_pose)){
-            ROS_ERROR("Can't get robot pose");
-            return -1.0;
+    return closestWP;
+    }
+  return -1;
+  }
+   
+  //works but needed to be tested with linear velo other than 0
+  int PurePursuit::getNextWP(){
+    int closestWayPoint=getClosestWP();
+    ROS_INFO("closestWP: %d",closestWayPoint);
+    if(global_plan_.size()>0 && closestWayPoint>=0){
+      geometry_msgs::PoseStamped closest_waypoint_pose;
+      tf::Vector3 v_1(global_plan_[closestWayPoint].pose.position.x,
+        global_plan_[closestWayPoint].pose.position.y,
+        global_plan_[closestWayPoint].pose.position.z);
+      double lookAheadThreshold = getLookAheadThreshold();
+      for (int i = closestWayPoint; i < global_plan_.size();++i){
+        tf::Vector3 v_2(global_plan_[i].pose.position.x,
+          global_plan_[i].pose.position.y,
+          global_plan_[i].pose.position.z);
+        ROS_INFO("DIST&THRESH: %f %f",tf::tfDistance(v_1, v_2),lookAheadThreshold);
+        if (tf::tfDistance(v_1, v_2) > lookAheadThreshold){
+          ROS_INFO("RETURNING: %d",i);
+          return i;
         }
-        geometry_msgs::PoseStamped origin;
-        poseStampedTFToMsg(robot_pose, origin);
-        
-        tf::Vector3 v1(origin.pose.position.x,
-                   origin.pose.position.y,
-                   origin.pose.position.z);
-        tf::Vector3 v2(global_plan_[waypoint].pose.position.x,
-                       global_plan_[waypoint].pose.position.y,
-                       global_plan_[waypoint].pose.position.z);
+      }
+      return closestWayPoint;
+    }
+    return -1;   
+  }
+   
+   
+   
+   
+   
+   
+  //ok ama kusuratta fark cikiyor
+  double PurePursuit::getLookAheadThreshold(){
+    return lookAheadRatio_*base_odom_.twist.twist.linear.x;
+  } 
     
-        return tf::tfAngle(v1, v2);
+  //ok & tested
+  double PurePursuit::getLookAheadDistance(int waypoint){
+    tf::Stamped<tf::Pose> robot_pose;
+    if(!costmap_ros_->getRobotPose(robot_pose)){
+      ROS_ERROR("Can't get robot pose");
+      return -1.0;
     }
 
-    //ok & tested
-    double PurePursuit::getArcDistance(int waypoint){
-        double lookAheadDistance = getLookAheadDistance(waypoint);
-        double lookAheadAngle = getLookAheadAngle(waypoint);
+    geometry_msgs::PoseStamped origin;
+    poseStampedTFToMsg(robot_pose, origin);
+        
+    tf::Vector3 v1(origin.pose.position.x,
+      origin.pose.position.y,
+      origin.pose.position.z);
+    tf::Vector3 v2(global_plan_[waypoint].pose.position.x,
+      global_plan_[waypoint].pose.position.y,
+      global_plan_[waypoint].pose.position.z);
+        
+    return tf::tfDistance(v1, v2);
+  }
+    
+  //ok & tested
+  double PurePursuit::getLookAheadAngle(int waypoint){
+    tf::Stamped<tf::Pose> robot_pose;
+    if(!costmap_ros_->getRobotPose(robot_pose)){
+      ROS_ERROR("Can't get robot pose");
+      return -1.0;
+    }
+    geometry_msgs::PoseStamped origin;
+    poseStampedTFToMsg(robot_pose, origin);
+        
+    tf::Vector3 v1(origin.pose.position.x,
+      origin.pose.position.y,
+      origin.pose.position.z);
+    tf::Vector3 v2(global_plan_[waypoint].pose.position.x,
+      global_plan_[waypoint].pose.position.y,
+      global_plan_[waypoint].pose.position.z);
+    
+    return tf::tfAngle(v1, v2);
+  }
 
-        if (std::abs(std::sin(lookAheadAngle)) >= epsilon_)
-          return lookAheadDistance/sin(lookAheadAngle)*lookAheadAngle;
-        else
-          return lookAheadDistance;
+  //ok & tested
+  double PurePursuit::getArcDistance(int waypoint){
+    double lookAheadDistance = getLookAheadDistance(waypoint);
+    double lookAheadAngle = getLookAheadAngle(waypoint);
+
+    if (std::abs(std::sin(lookAheadAngle)) >= epsilon_)
+      return lookAheadDistance/sin(lookAheadAngle)*lookAheadAngle;
+    else
+      return lookAheadDistance;
   }
 
 };
