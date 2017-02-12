@@ -29,6 +29,8 @@ namespace pure_pursuit {
             double getLookAheadDistance(int waypoint);
             double getLookAheadAngle(int waypoint);
             double getArcDistance(int waypoint);
+            int getClosestWP();
+            int getNextWP();
             
         private:
             inline double sign(double n){
