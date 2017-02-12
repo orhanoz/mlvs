@@ -127,7 +127,7 @@ namespace pure_pursuit{
 					poseStampedTFToMsg(tf_pose, newer_pose);
 					transformed_plan.push_back(newer_pose);
                     //ROS_INFO("glob: %f %f %f",pose.pose.position.x,pose.pose.position.y,pose.pose.position.z);
-                    ROS_INFO("newer:%f %f %f",newer_pose.pose.position.x,newer_pose.pose.position.y,newer_pose.pose.position.z);
+                    //ROS_INFO("newer:%f %f %f",newer_pose.pose.position.x,newer_pose.pose.position.y,newer_pose.pose.position.z);
 				}
 			}
 			catch(tf::LookupException& ex) {
@@ -148,182 +148,109 @@ namespace pure_pursuit{
 	}
 
     bool PurePursuit::computeVelocityCommands(geometry_msgs::Twist& cmd_vel){
-        //get the current pose of the robot in the fixed frame
-        tf::Stamped<tf::Pose> robot_pose;
-        geometry_msgs::PoseStamped robot_poseit;
-        cmd_vel.linear.x = 0.0;
-        cmd_vel.linear.y = 0.0;
-        cmd_vel.linear.z = 0.0;
-        cmd_vel.angular.x = 0.0;
-        cmd_vel.angular.y = 0.0;
-        cmd_vel.angular.z = 0.0;
-        
-        if(!costmap_ros_->getRobotPose(robot_pose)){
-            ROS_ERROR("Can't get robot pose");
-            geometry_msgs::Twist empty_twist;
-            cmd_vel = empty_twist;
-            return false;
-        }
-        poseStampedTFToMsg(robot_pose, robot_poseit);
-        ROS_INFO("Current pose: %f %f %f ", robot_poseit.pose.position.x,robot_poseit.pose.position.y,robot_poseit.pose.position.z);
-        
-        tf::Stamped<tf::Pose> cur_pose_of_waypoints;
-        tf::Stamped<tf::Pose> target_pose;
-        tf::poseStampedMsgToTF(global_plan_[current_waypoint_], cur_pose_of_waypoints);
-        ROS_INFO("Curren waypoint pose: %f %f %f",global_plan_[current_waypoint_].pose.position.x,global_plan_[current_waypoint_].pose.position.y,global_plan_[current_waypoint_].pose.position.z);
-        ROS_INFO("current waypoint #: %d",current_waypoint_);
-        
-        tf::Vector3 v1(robot_poseit.pose.position.x,robot_poseit.pose.position.y,robot_poseit.pose.position.z);
-        geometry_msgs::PoseStamped transformedPose;
-        tf::Vector3 v2(global_plan_[current_waypoint_].pose.position.x,global_plan_[current_waypoint_].pose.position.y,
-        global_plan_[current_waypoint_].pose.position.z);
-        
-        double lookAheadDistance_=tf::tfDistance(v1, v2);
-        double lookAheadAngle_=tf::tfAngle(v1, v2);
-        ROS_INFO("lookahead Distance & Angle: %f , %f",lookAheadDistance_,lookAheadAngle_);
-        
-        //double lookaheaddist2=getLookAheadDistance(current_waypoint_);
-        //double lookaheadangle2=getLookAheadAngle(current_waypoint_);
-        //ROS_INFO("lookahead Distance2 & Angle2: %f , %f",lookaheaddist2,lookaheadangle2);
-        
-        if (std::abs(std::sin(lookAheadAngle_)) >= epsilon_)
-            arcDistance_=lookAheadDistance_/sin(lookAheadAngle_)*lookAheadAngle_;
-        else
-            arcDistance_=lookAheadDistance_;
-        ROS_INFO("arcdistance: %f",arcDistance_);
-        //double arcdist = getArcDistance(current_waypoint_);
-        //ROS_INFO("arcdistance2: %f",arcdist);
-        //double lookthresh=getLookAheadThreshold();
-        //ROS_INFO("thresh: %f",lookthresh);
-        geometry_msgs::PoseStamped pose2;
-        getInterpolatedPose(current_waypoint_,pose2);
-        
-        //ust taraf ok...
-        geometry_msgs::PoseStamped pose;
-        double angularVelocity = 0.0;
-        double linearVelocity=0.0;
-        float deltaX=std::abs(global_plan_[current_waypoint_].pose.position.x-robot_poseit.pose.position.x);//abs sikintimi yoksa ?
-        float dist=sqrt((deltaX*deltaX)+((global_plan_[current_waypoint_].pose.position.y-robot_poseit.pose.position.y)*(global_plan_[current_waypoint_].pose.position.y-robot_poseit.pose.position.y)));
-        float radius=(dist*dist)/(2*deltaX);
-        ROS_INFO("radius & dist: %f %f",radius,dist);
-        float angle2=acos(((2*radius*radius)-(dist*dist))/(2*radius*radius));
-        ROS_INFO("ANGLE with cosine theo: %f",angle2);
-    //gitdeki kodda adam 0.5*(l/sin(angle)) yapmis ancak formulden cikartinca sin(angle/2) olması lazim cosine daha garanti duruyor...
-        
-        float angle_a=atan2(robot_poseit.pose.position.x,robot_poseit.pose.position.y);
-        float angle_b=atan2(global_plan_[current_waypoint_].pose.position.x,global_plan_[current_waypoint_].pose.position.y);
-    //??gelen - bir işe yarar mı ? angular zye geçirirken??
-        float angle_from_a_to_b=angle_b-angle_a;
-        ROS_INFO("Angle with atan2: %f",angle_from_a_to_b);
-        if(std::abs(std::sin(lookAheadAngle_)) >= epsilon_)//angle_from_a_to_b>0 idi fark eder mi SOR!!
-        angularVelocity=(M_PI/180)*angle2; //  RADYANI SOR!!
-        else
-        angularVelocity=(M_PI/180)*angle2*-1;  //radyana cevir ang.z zaten rad/s 
-        linearVelocity=radius*angle2; //radyana cevir curvature length kadar m/s bas  --- *(M_PI/180)
-        
-        //yeni taktique: rotate heading 90degree take dot product  
-        
-        cmd_vel.linear.x=linearVelocity;
-        cmd_vel.angular.z=angularVelocity;
-        ROS_INFO("HOOOO: %f %f",cmd_vel.linear.x,cmd_vel.angular.z);
-        
-        if(fabs(cmd_vel.linear.x) <= tolerance_trans_ &&
-            fabs(cmd_vel.angular.z) <= tolerance_rot_){
-                ROS_INFO("while..");
-                      if(current_waypoint_ < global_plan_.size() - 1)
-      {
-        current_waypoint_++;
-        tf::poseStampedMsgToTF(global_plan_[current_waypoint_], target_pose);
-      }
-      else
-      {
-        ROS_INFO("Reached goal: %d", current_waypoint_);
-        return true;
-      }
+        int wayPoint=getNextWP();
+        ROS_INFO("WAYPOINT: %d",wayPoint);
+        if(wayPoint>=0){
+            //getCurrentPose
+            tf::Stamped<tf::Pose> robot_pose;
+            if(!costmap_ros_->getRobotPose(robot_pose)){
+                ROS_ERROR("Can't get robot pose");
+                geometry_msgs::Twist empty_twist;
+                cmd_vel = empty_twist;
+                return false;
             }
-            return true;
+            ROS_INFO("Current Pose: %f %f %f ",robot_pose.getOrigin().x(),robot_pose.getOrigin().y(),tf::getYaw(robot_pose.getRotation()));
+            //getTargetPose
+            tf::Stamped<tf::Pose> target_pose;
+            tf::poseStampedMsgToTF(global_plan_[wayPoint], target_pose);
+            ROS_INFO("Current waypoint pose: %f %f %f",target_pose.getOrigin().x(),target_pose.getOrigin().y(),tf::getYaw(target_pose.getRotation()));
+            //getVehicleCoord
+            double dx = target_pose.getOrigin().x() - robot_pose.getOrigin().x();
+            double dy = target_pose.getOrigin().y() - robot_pose.getOrigin().y();
+            double x1 = std::cos(tf::getYaw(robot_pose.getRotation())) * dx + std::sin(tf::getYaw(robot_pose.getRotation())) * dy;
+            double y1 = -1*std::sin(tf::getYaw(robot_pose.getRotation())) * dx + std::cos(tf::getYaw(robot_pose.getRotation())) * dy;
+            //calcCurve
+            double curve=2/((x1*x1)+(y1*y1))*(-1*y1);
+            ROS_INFO("x1,y1,curve: %f %f %f",x1,y1,curve);
+            double linearVelocity=0.1;
+            double angularVelocity=0.0;
+            if(std::abs(curve)>0.2){
+                angularVelocity= sign(curve)*std::max((linearVelocity*curve),min_vel_th_);
+                if(linearVelocity<1.9)
+                linearVelocity=linearVelocity+0.1;
+            }
+            else{
+                angularVelocity=0.0;
+                //linearVelocity=linearVelocity+0.1;
+            }
+            cmd_vel.linear.x=linearVelocity;
+            cmd_vel.angular.z=angularVelocity;
+            ROS_INFO("HOOOO: %f %f",cmd_vel.linear.x,cmd_vel.angular.z);
             
-        }
+       }
+       
+    }
    
+   //error free, not tested
+   int PurePursuit::getClosestWP(){
+       if(global_plan_.size()>0){
+           int closestWP=-1;
+           double minDistance = -1.0;
+           for(int i=0;i<global_plan_.size();++i){
+               double distance=getArcDistance(i);
+               if((minDistance<0.0) || (distance<minDistance)){
+                   closestWP=i;
+                   minDistance=distance;
+               }
+           }
+           return closestWP;
+       }
+       return -1;
+   }
    
-   
-    //yeni eklemeler..06-02
-    //no error test etmedim
-    bool PurePursuit::getInterpolatedPose(int wayPoint,geometry_msgs::PoseStamped& interpolatedPose){
-        if (global_plan_.size()>0) {
-            if (wayPoint > 0) {
-                double l_t = getLookAheadThreshold();
-                double p_t = getLookAheadDistance(current_waypoint_);
-                if (p_t < l_t) {
-                    tf::Stamped<tf::Pose> robot_pose;
-                    if(!costmap_ros_->getRobotPose(robot_pose)){
-                        ROS_ERROR("Can't get robot pose");
-                        return false;
-                    }
-                    //tf::Stamped<tf::Pose> cur_pose_of_waypoints;
-                    //tf::Stamped<tf::Pose> cur_pose_of_waypoints_next;
-                    //tf::poseStampedMsgToTF(global_plan_[current_waypoint_], cur_pose_of_waypoints);
-                    //tf::poseStampedMsgToTF(global_plan_[current_waypoint_+1], cur_pose_of_waypoints_next);
-                    
-                    geometry_msgs::PoseStamped p_0;
-                    poseStampedTFToMsg(robot_pose, p_0);
-               
-                    geometry_msgs::PoseStamped p_1= 
-                        global_plan_[wayPoint];
-                    geometry_msgs::PoseStamped p_2 = 
-                        global_plan_[wayPoint+1];
-              
-                    tf::Vector3 v_1(p_2.pose.position.x-p_0.pose.position.x,
-                              p_2.pose.position.y-p_0.pose.position.y,
-                              p_2.pose.position.z-p_0.pose.position.z);
-                    tf::Vector3 v_2(p_1.pose.position.x-p_0.pose.position.x,
-                              p_1.pose.position.y-p_0.pose.position.y,
-                              p_1.pose.position.z-p_0.pose.position.z);
-                    tf::Vector3 v_0(p_2.pose.position.x-p_1.pose.position.x,
-                              p_2.pose.position.y-p_1.pose.position.y,
-                              p_2.pose.position.z-p_1.pose.position.z);
-              
-                    double l_0 = v_0.length();
-                    double l_1 = v_1.length();
-                    double l_2 = v_2.length();
-              
-                    v_0.normalize();
-                    v_2.normalize();
-              
-                    double alpha_1 = M_PI-tf::tfAngle(v_0, v_2);
-                    double beta_2 = asin(l_2*sin(alpha_1)/l_t);
-                    double beta_0 = M_PI-alpha_1-beta_2;
-                    double l_s = l_2*sin(beta_0)/sin(beta_2);
-                    tf::Vector3 p_s(p_1.pose.position.x+v_0[0]*l_s,
-                              p_1.pose.position.x+v_0[1]*l_s,
-                              p_1.pose.position.x+v_0[2]*l_s);
-
-                    interpolatedPose.pose.position.x = p_s[0];
-                    interpolatedPose.pose.position.y = p_s[1];
-                    interpolatedPose.pose.position.z = p_s[2];
-                    ROS_INFO("Interpolated: %f %f %f",interpolatedPose.pose.position.x,interpolatedPose.pose.position.y,interpolatedPose.pose.position.z);
-                    return true;
+   //works but needed to be tested with linear velo other than 0
+   int PurePursuit::getNextWP(){
+       int closestWayPoint=getClosestWP();
+       ROS_INFO("closestWP: %d",closestWayPoint);
+       if(global_plan_.size()>0 && closestWayPoint>=0){
+            geometry_msgs::PoseStamped closest_waypoint_pose;
+            tf::Vector3 v_1(global_plan_[closestWayPoint].pose.position.x,
+                global_plan_[closestWayPoint].pose.position.y,
+                global_plan_[closestWayPoint].pose.position.z);
+            double lookAheadThreshold = getLookAheadThreshold();
+            for (int i = closestWayPoint; i < global_plan_.size();++i){
+                tf::Vector3 v_2(global_plan_[i].pose.position.x,
+                    global_plan_[i].pose.position.y,
+                    global_plan_[i].pose.position.z);
+                    ROS_INFO("DIST&THRESH: %f %f",tf::tfDistance(v_1, v_2),lookAheadThreshold);
+                if (tf::tfDistance(v_1, v_2) > lookAheadThreshold){
+                    ROS_INFO("RETURNING: %d",i);
+                    return i;
                 }
             }
-            interpolatedPose = global_plan_[wayPoint];
-            ROS_INFO("Interpolated_DIS: %f %f %f",interpolatedPose.pose.position.x,interpolatedPose.pose.position.y,interpolatedPose.pose.position.z);
-            return true;
+            return closestWayPoint;
         }
-        return false;
+    return -1;   
     }
+   
+   
+   
+   
+   
    
     //ok ama kusuratta fark cikiyor
     double PurePursuit::getLookAheadThreshold(){
         return lookAheadRatio_*base_odom_.twist.twist.linear.x;
     } 
     
-    //ok tested
+    //ok & tested
     double PurePursuit::getLookAheadDistance(int waypoint){
         tf::Stamped<tf::Pose> robot_pose;
         if(!costmap_ros_->getRobotPose(robot_pose)){
             ROS_ERROR("Can't get robot pose");
             return -1.0;
         }
+        
         geometry_msgs::PoseStamped origin;
         poseStampedTFToMsg(robot_pose, origin);
         
@@ -337,7 +264,7 @@ namespace pure_pursuit{
         return tf::tfDistance(v1, v2);
       }
     
-    //ok tested
+    //ok & tested
     double PurePursuit::getLookAheadAngle(int waypoint){
         tf::Stamped<tf::Pose> robot_pose;
         if(!costmap_ros_->getRobotPose(robot_pose)){
@@ -357,7 +284,7 @@ namespace pure_pursuit{
         return tf::tfAngle(v1, v2);
     }
 
-    //ok tested
+    //ok & tested
     double PurePursuit::getArcDistance(int waypoint){
         double lookAheadDistance = getLookAheadDistance(waypoint);
         double lookAheadAngle = getLookAheadAngle(waypoint);
