@@ -29,9 +29,14 @@ namespace pure_pursuit {
             int getClosestWP();
             int getNextWP();
             
+            
         private:
             inline double sign(double n){
                 return n < 0.0 ? -1.0 : 1.0;
+            }
+
+            inline double cross(double x,double y,double x2, double y2){
+                return x*y2 - y*x2;
             }
         
         geometry_msgs::Twist limitTwist(const geometry_msgs::Twist& twist);
